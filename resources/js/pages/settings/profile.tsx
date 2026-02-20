@@ -2,8 +2,8 @@ import { Head, usePage } from '@inertiajs/react';
 import DeleteUser from '@/components/delete-user';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
-import type { BreadcrumbItem } from '@/types';
 import { edit } from '@/routes/profile';
+import type { BreadcrumbItem } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {

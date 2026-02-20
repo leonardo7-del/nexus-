@@ -2,8 +2,8 @@ import { Head } from '@inertiajs/react';
 import { ChevronDown, ClipboardList, Users } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem } from '@/types';
 import { dashboard } from '@/routes';
+import type { BreadcrumbItem } from '@/types';
 
 type AuditLog = {
     id: number;
