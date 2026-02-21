@@ -72,6 +72,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Disable remember token persistence because the custom users table
+     * does not include a remember_token column.
+     */
+    public function getRememberTokenName(): string
+    {
+        return '';
+    }
+
+    /**
      * Compatibility display name derived from email prefix.
      */
     public function getNameAttribute(): string

@@ -6,6 +6,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 Route::get('/', function () {
@@ -92,16 +93,30 @@ Route::get('dashboard', function () {
         ->values();
 
     $users = DB::table('users')
-        ->select(['id', 'email', 'password_hash', 'remember_token', 'created_at'])
+        ->select(['id', 'email', 'created_at'])
         ->orderByDesc('id')
         ->get()
         ->map(fn (object $user): array => [
             'id' => (int) $user->id,
             'email' => (string) $user->email,
-            'password_hash' => (string) $user->password_hash,
-            'remember_token' => $user->remember_token !== null ? (string) $user->remember_token : null,
             'created_at' => (string) $user->created_at,
         ]);
+
+    $otpCodes = collect();
+
+    if (Schema::hasTable('otp_codes')) {
+        $otpCodes = DB::table('otp_codes')
+            ->select(['id', 'user_id', 'code', 'expires_at', 'used'])
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (object $otp): array => [
+                'id' => (int) $otp->id,
+                'user_id' => (int) $otp->user_id,
+                'code' => (string) $otp->code,
+                'expires_at' => (string) $otp->expires_at,
+                'used' => (int) $otp->used === 1,
+            ]);
+    }
 
     return Inertia::render('dashboard', [
         'auditLogs' => $auditLogs,
@@ -113,7 +128,95 @@ Route::get('dashboard', function () {
         ],
         'activity' => $activitySeries,
         'users' => $users,
+        'otpCodes' => $otpCodes,
     ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
+
+Route::get('dashboard/export-records', function () {
+    if (! class_exists(\ZipArchive::class)) {
+        abort(500, 'La extension ZIP no esta habilitada en el servidor.');
+    }
+
+    $auditLogs = DB::table('audit_logs')
+        ->select(['id', 'user_id', 'action', 'ip_address', 'details', 'created_at'])
+        ->orderByDesc('id')
+        ->get()
+        ->map(function (object $log): array {
+            $decodedDetails = null;
+
+            if (is_string($log->details) && $log->details !== '') {
+                $decoded = json_decode($log->details, true);
+                $decodedDetails = is_array($decoded) ? $decoded : $log->details;
+            }
+
+            return [
+                'id' => (int) $log->id,
+                'user_id' => $log->user_id !== null ? (int) $log->user_id : null,
+                'action' => $log->action,
+                'ip_address' => $log->ip_address,
+                'details' => $decodedDetails,
+                'created_at' => (string) $log->created_at,
+            ];
+        })
+        ->values()
+        ->all();
+
+    $users = DB::table('users')
+        ->select(['id', 'email', 'created_at'])
+        ->orderByDesc('id')
+        ->get()
+        ->map(fn (object $user): array => [
+            'id' => (int) $user->id,
+            'email' => (string) $user->email,
+            'created_at' => (string) $user->created_at,
+        ])
+        ->values()
+        ->all();
+
+    $otpCodes = [];
+
+    if (Schema::hasTable('otp_codes')) {
+        $otpCodes = DB::table('otp_codes')
+            ->select(['id', 'user_id', 'code', 'expires_at', 'used'])
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (object $otp): array => [
+                'id' => (int) $otp->id,
+                'user_id' => (int) $otp->user_id,
+                'code' => (string) $otp->code,
+                'expires_at' => (string) $otp->expires_at,
+                'used' => (int) $otp->used === 1,
+            ])
+            ->values()
+            ->all();
+    }
+
+    $now = now();
+    $stamp = $now->format('Y-m-d_H-i-s');
+    $txtName = "registros-completos-{$stamp}.txt";
+    $zipName = "registros-completos-{$stamp}.zip";
+
+    $content = "NEXUS - EXPORTACION DE REGISTROS\n";
+    $content .= 'Generado: '.$now->toDateTimeString()."\n\n";
+    $content .= 'Totales: audit_logs='.count($auditLogs).', users='.count($users).', otp_codes='.count($otpCodes)."\n\n";
+    $content .= "===== AUDIT_LOGS =====\n";
+    $content .= json_encode($auditLogs, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)."\n\n";
+    $content .= "===== USERS =====\n";
+    $content .= json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)."\n\n";
+    $content .= "===== OTP_CODES =====\n";
+    $content .= json_encode($otpCodes, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)."\n";
+
+    $zipPath = tempnam(sys_get_temp_dir(), 'nexus_export_');
+    $zip = new \ZipArchive();
+
+    if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+        abort(500, 'No se pudo crear el archivo ZIP.');
+    }
+
+    $zip->addFromString($txtName, $content);
+    $zip->close();
+
+    return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+})->middleware(['auth', 'verified'])->name('dashboard.export-records');
 
 require __DIR__.'/settings.php';
