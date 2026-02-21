@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\OtpLoginController;
 use App\Http\Controllers\Auth\OtpPasswordResetController;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -23,7 +24,6 @@ Route::get('dashboard', function () {
     $auditLogs = DB::table('audit_logs')
         ->select(['id', 'user_id', 'action', 'ip_address', 'details', 'created_at'])
         ->orderByDesc('id')
-        ->limit(100)
         ->get()
         ->map(function (object $log): array {
             $decodedDetails = null;
@@ -43,18 +43,75 @@ Route::get('dashboard', function () {
             ];
         });
 
-    $users = User::query()
-        ->select(['id', 'email', 'created_at'])
-        ->orderBy('id')
+    $totalEvents = DB::table('audit_logs')->count();
+    $successfulLogins = DB::table('audit_logs')
+        ->where('action', 'OTP_VERIFICATION_SUCCESS')
+        ->count();
+    $failedEvents = DB::table('audit_logs')
+        ->where(function ($query): void {
+            $query
+                ->where('action', 'like', '%FAILED%')
+                ->orWhere('action', 'like', '%BLOCKED%');
+        })
+        ->count();
+    $totalRegistrations = User::query()->count();
+
+    $startDate = Carbon::now()->subDays(6)->startOfDay();
+
+    $loginsByDay = DB::table('audit_logs')
+        ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+        ->where('action', 'OTP_VERIFICATION_SUCCESS')
+        ->where('created_at', '>=', $startDate)
+        ->groupByRaw('DATE(created_at)')
+        ->pluck('total', 'day');
+
+    $failedByDay = DB::table('audit_logs')
+        ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+        ->where(function ($query): void {
+            $query
+                ->where('action', 'like', '%FAILED%')
+                ->orWhere('action', 'like', '%BLOCKED%');
+        })
+        ->where('created_at', '>=', $startDate)
+        ->groupByRaw('DATE(created_at)')
+        ->pluck('total', 'day');
+
+    $dayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    $activitySeries = collect(range(0, 6))
+        ->map(function (int $offset) use ($startDate, $dayLabels, $loginsByDay, $failedByDay): array {
+            $date = $startDate->copy()->addDays($offset);
+            $isoDate = $date->toDateString();
+
+            return [
+                'date' => $isoDate,
+                'label' => $dayLabels[$date->dayOfWeek],
+                'logins' => (int) ($loginsByDay[$isoDate] ?? 0),
+                'failed' => (int) ($failedByDay[$isoDate] ?? 0),
+            ];
+        })
+        ->values();
+
+    $users = DB::table('users')
+        ->select(['id', 'email', 'password_hash', 'remember_token', 'created_at'])
+        ->orderByDesc('id')
         ->get()
-        ->map(fn (User $user): array => [
-            'id' => $user->id,
-            'email' => $user->email,
-            'created_at' => $user->created_at?->toDateTimeString(),
+        ->map(fn (object $user): array => [
+            'id' => (int) $user->id,
+            'email' => (string) $user->email,
+            'password_hash' => (string) $user->password_hash,
+            'remember_token' => $user->remember_token !== null ? (string) $user->remember_token : null,
+            'created_at' => (string) $user->created_at,
         ]);
 
     return Inertia::render('dashboard', [
         'auditLogs' => $auditLogs,
+        'metrics' => [
+            'total_events' => $totalEvents,
+            'logins_ok' => $successfulLogins,
+            'registrations' => $totalRegistrations,
+            'failed' => $failedEvents,
+        ],
+        'activity' => $activitySeries,
         'users' => $users,
     ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
