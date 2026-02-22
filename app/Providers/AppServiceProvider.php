@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Carbon\CarbonImmutable;
+use RuntimeException;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
@@ -25,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->validateDatabaseConfiguration();
     }
 
     /**
@@ -51,5 +53,29 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null
         );
+    }
+
+    /**
+     * Fail fast with a clear message when production DB credentials are incomplete.
+     */
+    protected function validateDatabaseConfiguration(): void
+    {
+        if (! app()->isProduction()) {
+            return;
+        }
+
+        $connection = (string) config('database.default');
+
+        if (! in_array($connection, ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
+        $password = config("database.connections.{$connection}.password");
+
+        if (! is_string($password) || trim($password) === '') {
+            throw new RuntimeException(
+                'Database password is empty in production. Set DB_PASSWORD (or MYSQLPASSWORD) and clear config cache.'
+            );
+        }
     }
 }
