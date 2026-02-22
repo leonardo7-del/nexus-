@@ -22,8 +22,7 @@ RUN mkdir -p storage/framework/cache \
     && composer install --no-dev --optimize-autoloader --no-interaction --no-scripts \
     && cp .env.example .env \
     && php artisan key:generate --force \
-    && php artisan package:discover --ansi \
-    && npm ci --no-audit --no-fund \
+    && npm ci --include=dev --no-audit --no-fund \
     && npm run build \
     && rm -f .env
 
