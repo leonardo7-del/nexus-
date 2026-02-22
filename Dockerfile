@@ -13,15 +13,19 @@ WORKDIR /app
 
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader --no-interaction \
-    && npm ci \
-    && npm run build \
-    && mkdir -p storage/framework/cache \
+RUN mkdir -p storage/framework/cache \
         storage/framework/sessions \
         storage/framework/views \
         storage/logs \
         bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache \
+    && composer install --no-dev --optimize-autoloader --no-interaction --no-scripts \
+    && cp .env.example .env \
+    && php artisan key:generate --force \
+    && php artisan package:discover --ansi \
+    && npm ci --no-audit --no-fund \
+    && npm run build \
+    && rm -f .env
 
 EXPOSE 8080
 
