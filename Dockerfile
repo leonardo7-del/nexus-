@@ -14,17 +14,24 @@ WORKDIR /app
 COPY . .
 
 RUN mkdir -p storage/framework/cache \
-        storage/framework/sessions \
-        storage/framework/views \
-        storage/logs \
-        bootstrap/cache \
-    && chmod -R 777 storage bootstrap/cache \
-    && composer install --no-dev --optimize-autoloader --no-interaction --no-scripts \
-    && cp .env.example .env \
-    && php artisan key:generate --force \
-    && npm ci --include=dev --no-audit --no-fund \
-    && npm run build \
-    && rm -f .env
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache
+
+RUN chmod -R 777 storage bootstrap/cache
+
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
+RUN cp .env.example .env
+
+RUN php artisan key:generate --force
+
+RUN npm ci --include=dev --no-audit --no-fund
+
+RUN npm run build
+
+RUN rm -f .env
 
 EXPOSE 8080
 
