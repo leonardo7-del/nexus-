@@ -71,8 +71,13 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $password = config("database.connections.{$connection}.password");
+        $databaseUrl = config("database.connections.{$connection}.url");
+        $urlPassword = is_string($databaseUrl) ? parse_url($databaseUrl, PHP_URL_PASS) : null;
 
-        if (! is_string($password) || trim($password) === '') {
+        $hasScalarPassword = is_string($password) && trim($password) !== '';
+        $hasUrlPassword = is_string($urlPassword) && trim($urlPassword) !== '';
+
+        if (! $hasScalarPassword && ! $hasUrlPassword) {
             throw new RuntimeException(
                 'Database password is empty in production. Set DB_PASSWORD (or MYSQLPASSWORD) and clear config cache.'
             );
