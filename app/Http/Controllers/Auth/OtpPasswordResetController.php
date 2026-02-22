@@ -9,9 +9,11 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class OtpPasswordResetController extends Controller
 {
@@ -44,14 +46,16 @@ class OtpPasswordResetController extends Controller
             $statusMessage .= " (Debug local OTP: {$otp})";
         }
 
-        Mail::to($user->email)->queue(
+        $this->sendOtpMail(
+            $user->email,
             new OtpCodeMail(
                 subjectLine: 'Código OTP para recuperar contraseña',
                 title: 'Recuperación de contraseña',
                 description: 'Usa este código para continuar con el cambio de tu contraseña.',
                 code: $otp,
                 expiresInMinutes: 5,
-            )
+            ),
+            'password_reset'
         );
 
         $request->session()->put('password_reset_otp_user_id', $user->id);
@@ -122,5 +126,26 @@ class OtpPasswordResetController extends Controller
             'token' => $token,
             'email' => $user->email,
         ]);
+    }
+
+    private function sendOtpMail(string $email, OtpCodeMail $mail, string $context): void
+    {
+        if (config('queue.default') === 'sync') {
+            dispatch(function () use ($email, $mail, $context): void {
+                try {
+                    Mail::to($email)->send($mail);
+                } catch (Throwable $exception) {
+                    Log::error('OTP mail delivery failed.', [
+                        'context' => $context,
+                        'email' => $email,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
+
+            return;
+        }
+
+        Mail::to($email)->queue($mail);
     }
 }

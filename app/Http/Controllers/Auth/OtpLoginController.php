@@ -10,10 +10,12 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class OtpLoginController extends Controller
 {
@@ -70,14 +72,16 @@ class OtpLoginController extends Controller
             $statusMessage .= " (Debug local OTP: {$otp})";
         }
 
-        Mail::to($user->email)->queue(
+        $this->sendOtpMail(
+            $user->email,
             new OtpCodeMail(
                 subjectLine: 'Código OTP de acceso',
                 title: 'Verificación de inicio de sesión',
                 description: 'Usa este código para continuar con el acceso a tu cuenta.',
                 code: $otp,
                 expiresInMinutes: 5,
-            )
+            ),
+            'login'
         );
 
         $request->session()->put('otp_pending_user_id', $user->id);
@@ -231,5 +235,26 @@ class OtpLoginController extends Controller
         }
 
         return false;
+    }
+
+    private function sendOtpMail(string $email, OtpCodeMail $mail, string $context): void
+    {
+        if (config('queue.default') === 'sync') {
+            dispatch(function () use ($email, $mail, $context): void {
+                try {
+                    Mail::to($email)->send($mail);
+                } catch (Throwable $exception) {
+                    Log::error('OTP mail delivery failed.', [
+                        'context' => $context,
+                        'email' => $email,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
+
+            return;
+        }
+
+        Mail::to($email)->queue($mail);
     }
 }
