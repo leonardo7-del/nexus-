@@ -18,7 +18,7 @@ RUN mkdir -p storage/framework/cache \
         storage/framework/views \
         storage/logs \
         bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache \
+    && chmod -R 777 storage bootstrap/cache \
     && composer install --no-dev --optimize-autoloader --no-interaction --no-scripts \
     && cp .env.example .env \
     && php artisan key:generate --force \
@@ -29,4 +29,4 @@ RUN mkdir -p storage/framework/cache \
 
 EXPOSE 8080
 
-CMD sh -lc "php artisan config:clear && php artisan cache:clear && php artisan view:clear && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
+CMD sh -lc "mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && chmod -R 777 storage bootstrap/cache && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
