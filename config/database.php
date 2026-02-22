@@ -2,6 +2,22 @@
 
 use Illuminate\Support\Str;
 
+$safeUrl = static function (): ?string {
+    $url = env('DATABASE_URL', env('DB_URL'));
+
+    if (! is_string($url)) {
+        return null;
+    }
+
+    $trimmed = trim($url);
+
+    if ($trimmed === '' || str_contains($trimmed, '${{')) {
+        return null;
+    }
+
+    return $trimmed;
+};
+
 $envOrFallback = static function (string $primary, string $secondary, string $default = ''): string {
     $value = env($primary);
 
@@ -62,7 +78,7 @@ return [
 
         'mysql' => [
             'driver' => 'mysql',
-            'url' => env('DATABASE_URL', env('DB_URL')),
+            'url' => $safeUrl(),
             'host' => $envOrFallback('DB_HOST', 'MYSQLHOST', '127.0.0.1'),
             'port' => $envOrFallback('DB_PORT', 'MYSQLPORT', '3306'),
             'database' => $envOrFallback('DB_DATABASE', 'MYSQLDATABASE', 'laravel'),
@@ -82,7 +98,7 @@ return [
 
         'mariadb' => [
             'driver' => 'mariadb',
-            'url' => env('DATABASE_URL', env('DB_URL')),
+            'url' => $safeUrl(),
             'host' => $envOrFallback('DB_HOST', 'MYSQLHOST', '127.0.0.1'),
             'port' => $envOrFallback('DB_PORT', 'MYSQLPORT', '3306'),
             'database' => $envOrFallback('DB_DATABASE', 'MYSQLDATABASE', 'laravel'),
