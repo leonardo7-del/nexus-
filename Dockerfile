@@ -35,4 +35,19 @@ RUN rm -f .env
 
 EXPOSE 8080
 
-CMD sh -lc "echo '--- ENV DB DEBUG ---' && env | grep -E 'DB_|MYSQL|DATABASE_URL|DB_URL' && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && chmod -R 777 storage bootstrap/cache && php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan migrate --force && php artisan queue:work --sleep=1 --tries=3 --timeout=60 & php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
+CMD sh -lc "set -eu; \
+export DB_CONNECTION=\"${DB_CONNECTION:-mysql}\"; \
+export DB_HOST=\"${DB_HOST:-${MYSQLHOST:-127.0.0.1}}\"; \
+export DB_PORT=\"${DB_PORT:-${MYSQLPORT:-3306}}\"; \
+export DB_DATABASE=\"${DB_DATABASE:-${MYSQLDATABASE:-laravel}}\"; \
+export DB_USERNAME=\"${DB_USERNAME:-${MYSQLUSER:-root}}\"; \
+export DB_PASSWORD=\"${DB_PASSWORD:-${MYSQLPASSWORD:-}}\"; \
+if [ -z \"${DB_PASSWORD}\" ]; then echo 'ERROR: DB_PASSWORD is empty. Set DB_PASSWORD (or MYSQLPASSWORD) in Railway variables.'; exit 1; fi; \
+echo '--- ENV DB DEBUG ---'; \
+env | grep -E '^DB_CONNECTION=|^DB_HOST=|^DB_PORT=|^DB_DATABASE=|^DB_USERNAME='; \
+mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache; \
+chmod -R 777 storage bootstrap/cache; \
+php artisan optimize:clear; \
+php artisan migrate --force; \
+php artisan queue:work --sleep=1 --tries=3 --timeout=60 & \
+php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
