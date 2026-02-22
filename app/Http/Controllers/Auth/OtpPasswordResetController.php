@@ -42,26 +42,21 @@ class OtpPasswordResetController extends Controller
 
         $statusMessage = 'Te enviamos un código OTP a tu correo.';
 
-        try {
-            Mail::to($user->email)->send(
-                new OtpCodeMail(
-                    subjectLine: 'Código OTP para recuperar contraseña',
-                    title: 'Recuperación de contraseña',
-                    description: 'Usa este código para continuar con el cambio de tu contraseña.',
-                    code: $otp,
-                    expiresInMinutes: 5,
-                )
-            );
-        } catch (Throwable $exception) {
-            Log::error('OTP password reset mail delivery failed.', [
-                'email' => $user->email,
-                'error' => $exception->getMessage(),
-            ]);
-
-            if (app()->environment('local')) {
-                $statusMessage = "No se pudo enviar el correo. OTP de prueba: {$otp}";
-            }
+        if (app()->isLocal()) {
+            $statusMessage .= " (Debug local OTP: {$otp})";
         }
+
+        $this->sendOtpMailAfterResponse(
+            email: $user->email,
+            mail: new OtpCodeMail(
+                subjectLine: 'Código OTP para recuperar contraseña',
+                title: 'Recuperación de contraseña',
+                description: 'Usa este código para continuar con el cambio de tu contraseña.',
+                code: $otp,
+                expiresInMinutes: 5,
+            ),
+            context: 'password_reset'
+        );
 
         $request->session()->put('password_reset_otp_user_id', $user->id);
         $request->session()->put('password_reset_otp_email', $user->email);
@@ -131,5 +126,20 @@ class OtpPasswordResetController extends Controller
             'token' => $token,
             'email' => $user->email,
         ]);
+    }
+
+    private function sendOtpMailAfterResponse(string $email, OtpCodeMail $mail, string $context): void
+    {
+        dispatch(function () use ($email, $mail, $context): void {
+            try {
+                Mail::to($email)->send($mail);
+            } catch (Throwable $exception) {
+                Log::error('OTP mail delivery failed.', [
+                    'context' => $context,
+                    'email' => $email,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        })->afterResponse();
     }
 }

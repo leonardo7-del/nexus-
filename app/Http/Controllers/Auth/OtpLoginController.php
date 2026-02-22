@@ -68,26 +68,21 @@ class OtpLoginController extends Controller
 
         $statusMessage = 'Te enviamos un código OTP a tu correo.';
 
-        try {
-            Mail::to($user->email)->send(
-                new OtpCodeMail(
-                    subjectLine: 'Código OTP de acceso',
-                    title: 'Verificación de inicio de sesión',
-                    description: 'Usa este código para continuar con el acceso a tu cuenta.',
-                    code: $otp,
-                    expiresInMinutes: 5,
-                )
-            );
-        } catch (Throwable $exception) {
-            Log::error('OTP login mail delivery failed.', [
-                'email' => $user->email,
-                'error' => $exception->getMessage(),
-            ]);
-
-            if (app()->environment('local')) {
-                $statusMessage = "No se pudo enviar el correo. OTP de prueba: {$otp}";
-            }
+        if (app()->isLocal()) {
+            $statusMessage .= " (Debug local OTP: {$otp})";
         }
+
+        $this->sendOtpMailAfterResponse(
+            email: $user->email,
+            mail: new OtpCodeMail(
+                subjectLine: 'Código OTP de acceso',
+                title: 'Verificación de inicio de sesión',
+                description: 'Usa este código para continuar con el acceso a tu cuenta.',
+                code: $otp,
+                expiresInMinutes: 5,
+            ),
+            context: 'login'
+        );
 
         $request->session()->put('otp_pending_user_id', $user->id);
         $request->session()->put('otp_pending_email', $user->email);
@@ -240,5 +235,20 @@ class OtpLoginController extends Controller
         }
 
         return false;
+    }
+
+    private function sendOtpMailAfterResponse(string $email, OtpCodeMail $mail, string $context): void
+    {
+        dispatch(function () use ($email, $mail, $context): void {
+            try {
+                Mail::to($email)->send($mail);
+            } catch (Throwable $exception) {
+                Log::error('OTP mail delivery failed.', [
+                    'context' => $context,
+                    'email' => $email,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        })->afterResponse();
     }
 }
