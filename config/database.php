@@ -2,6 +2,23 @@
 
 use Illuminate\Support\Str;
 
+$envOrFallback = static function (string $primary, string $secondary, string $default = ''): string {
+    $value = env($primary);
+
+    if (! is_string($value) || trim($value) === '') {
+        return (string) env($secondary, $default);
+    }
+
+    $trimmed = trim($value);
+
+    // Guard against CI/hosting placeholders or full DSN values accidentally put in scalar vars.
+    if (str_contains($trimmed, '://') || str_contains($trimmed, '${{')) {
+        return (string) env($secondary, $default);
+    }
+
+    return $trimmed;
+};
+
 return [
 
     /*
@@ -46,11 +63,11 @@ return [
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DATABASE_URL', env('DB_URL')),
-            'host' => env('MYSQLHOST', env('DB_HOST', '127.0.0.1')),
-            'port' => env('MYSQLPORT', env('DB_PORT', '3306')),
-            'database' => env('MYSQLDATABASE', env('DB_DATABASE', 'laravel')),
-            'username' => env('MYSQLUSER', env('DB_USERNAME', 'root')),
-            'password' => env('MYSQLPASSWORD', env('DB_PASSWORD', '')),
+            'host' => $envOrFallback('DB_HOST', 'MYSQLHOST', '127.0.0.1'),
+            'port' => $envOrFallback('DB_PORT', 'MYSQLPORT', '3306'),
+            'database' => $envOrFallback('DB_DATABASE', 'MYSQLDATABASE', 'laravel'),
+            'username' => $envOrFallback('DB_USERNAME', 'MYSQLUSER', 'root'),
+            'password' => $envOrFallback('DB_PASSWORD', 'MYSQLPASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
@@ -66,11 +83,11 @@ return [
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DATABASE_URL', env('DB_URL')),
-            'host' => env('MYSQLHOST', env('DB_HOST', '127.0.0.1')),
-            'port' => env('MYSQLPORT', env('DB_PORT', '3306')),
-            'database' => env('MYSQLDATABASE', env('DB_DATABASE', 'laravel')),
-            'username' => env('MYSQLUSER', env('DB_USERNAME', 'root')),
-            'password' => env('MYSQLPASSWORD', env('DB_PASSWORD', '')),
+            'host' => $envOrFallback('DB_HOST', 'MYSQLHOST', '127.0.0.1'),
+            'port' => $envOrFallback('DB_PORT', 'MYSQLPORT', '3306'),
+            'database' => $envOrFallback('DB_DATABASE', 'MYSQLDATABASE', 'laravel'),
+            'username' => $envOrFallback('DB_USERNAME', 'MYSQLUSER', 'root'),
+            'password' => $envOrFallback('DB_PASSWORD', 'MYSQLPASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
