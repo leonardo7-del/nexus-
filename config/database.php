@@ -15,6 +15,17 @@ $safeUrl = static function (): ?string {
         return null;
     }
 
+    // If an explicit DB password exists but the URL has none, prefer scalar DB_* vars.
+    // Some platforms inject DATABASE_URL without credentials, causing "using password: NO".
+    $explicitPassword = env('DB_PASSWORD', env('MYSQLPASSWORD'));
+    $urlPassword = parse_url($trimmed, PHP_URL_PASS);
+
+    if (is_string($explicitPassword) && trim($explicitPassword) !== '') {
+        if (! is_string($urlPassword) || trim($urlPassword) === '') {
+            return null;
+        }
+    }
+
     return $trimmed;
 };
 
